@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/vk-cs/terraform-provider-vkcs/vkcs"
+	"github.com/terraform-providers/terraform-provider-aws/aws"
 	"os"
 	"reflect"
 )
@@ -117,7 +117,7 @@ func check(e error) {
 
 func main() {
 	// Instantiate the plugin
-	provider := vkcs.Provider()
+	provider := aws.Provider()
 
 	// Extract provider information
 	providerValue := reflect.ValueOf(provider).Elem()
@@ -130,12 +130,12 @@ func main() {
 	check(err)
 
 	// create file if not exists
-	_, err = os.Stat("./vk.json")
+	_, err = os.Stat("./aws.json")
 	if os.IsNotExist(err) {
-		_, err = os.Create("./vk.json")
+		_, err = os.Create("./aws.json")
 		check(err)
 	}
-	err = os.WriteFile("./vk.json", m, 0644)
+	err = os.WriteFile("./aws.json", m, 0644)
 	check(err)
 	// save to file
 
