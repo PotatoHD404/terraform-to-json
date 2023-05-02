@@ -2,11 +2,39 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"reflect"
-
 	"github.com/yandex-cloud/terraform-provider-yandex/yandex"
+	"os"
+	"reflect"
 )
+
+func processValue(value reflect.Value) (interface{}, bool) {
+	flag := false
+	for value.Kind() == reflect.Ptr {
+		if !value.IsValid() || value.IsNil() {
+			flag = true
+			break
+		}
+		value = value.Elem()
+	}
+	if flag || valueIsValid(value) {
+		return nil, false
+	}
+
+	switch value.Kind() {
+	case reflect.Struct:
+		return walkStruct(value), true
+	case reflect.Map:
+		return walkMap(value), true
+	case reflect.Slice:
+		return walkSlice(value), true
+	case reflect.Interface:
+		return processValue(value.Elem()) // Handle the interface by processing its underlying value
+	case reflect.Func:
+		return nil, false
+	default:
+		return value.Interface(), true
+	}
+}
 
 func walkStruct(v reflect.Value) map[string]interface{} {
 	result := make(map[string]interface{})
@@ -14,22 +42,27 @@ func walkStruct(v reflect.Value) map[string]interface{} {
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Type().Field(i)
 		value := v.Field(i)
-		fieldName := field.Name
 
-		// Skip unexported fields
 		if field.PkgPath != "" {
 			continue
 		}
 
-		switch value.Kind() {
-		case reflect.Struct:
-			result[fieldName] = walkStruct(value)
-		case reflect.Map:
-			result[fieldName] = walkMap(value)
-		case reflect.Func:
-			// Skip functions
-		default:
-			result[fieldName] = value.Interface()
+		if processedValue, ok := processValue(value); ok {
+			result[field.Name] = processedValue
+		}
+	}
+
+	return result
+}
+
+func walkSlice(v reflect.Value) []interface{} {
+	result := make([]interface{}, 0, v.Len())
+
+	for i := 0; i < v.Len(); i++ {
+		value := v.Index(i)
+
+		if processedValue, ok := processValue(value); ok {
+			result = append(result, processedValue)
 		}
 	}
 
@@ -42,19 +75,44 @@ func walkMap(v reflect.Value) map[string]interface{} {
 	for _, key := range v.MapKeys() {
 		value := v.MapIndex(key)
 
-		switch value.Kind() {
-		case reflect.Struct:
-			result[key.String()] = walkStruct(value)
-		case reflect.Map:
-			result[key.String()] = walkMap(value)
-		case reflect.Func:
-			// Skip functions
-		default:
-			result[key.String()] = value.Interface()
+		if processedValue, ok := processValue(value); ok {
+			result[key.String()] = processedValue
 		}
 	}
 
 	return result
+}
+
+func valueIsValid(value reflect.Value) bool {
+	return !value.IsValid() ||
+		value.Type().String() == "schema.SchemaDiffSuppressFunc" ||
+		value.Type().String() == "schema.SchemaStateFunc" ||
+		value.Type().String() == "schema.SchemaValidateFunc" ||
+		value.Type().String() == "schema.DeleteContextFunc" ||
+		value.Type().String() == "schema.ReadContextFunc" ||
+		value.Type().String() == "schema.UpdateContextFunc" ||
+		value.Type().String() == "schema.CustomizeDiffFunc" ||
+		value.Type().String() == "schema.StateFunc" ||
+		value.Type().String() == "schema.StateContextFunc" ||
+		value.Type().String() == "schema.SchemaSetFunc" ||
+		value.Type().String() == "schema.SchemaValidateDiagFunc" ||
+		value.Type().String() == "schema.SchemaDefaultFunc" ||
+		value.Type().String() == "schema.StateMigrateFunc" ||
+		value.Type().String() == "schema.CreateFunc" ||
+		value.Type().String() == "schema.ReadFunc" ||
+		value.Type().String() == "schema.UpdateFunc" ||
+		value.Type().String() == "schema.DeleteFunc" ||
+		value.Type().String() == "schema.ExistsFunc" ||
+		value.Type().String() == "schema.CreateContextFunc" ||
+		value.Type().String() == "schema.StateMigrateFunc" ||
+		value.Type().String() == "schema.ConfigureFunc" ||
+		value.Type().String() == "schema.ConfigureContextFunc"
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
 }
 
 func main() {
@@ -65,10 +123,20 @@ func main() {
 	providerValue := reflect.ValueOf(provider).Elem()
 	providerInfo := walkStruct(providerValue)
 
+	//fmt.Println("providerInfo: ", providerInfo)
+
 	// Convert provider information to JSON
 	m, err := json.MarshalIndent(providerInfo, "", "  ")
-	if err != nil {
-		panic(err)
+	check(err)
+
+	// create file if not exists
+	_, err = os.Stat("./yandex.json")
+	if os.IsNotExist(err) {
+		_, err = os.Create("./yandex.json")
+		check(err)
 	}
-	fmt.Println(string(m))
+	err = os.WriteFile("./yandex.json", m, 0644)
+	check(err)
+	// save to file
+
 }
