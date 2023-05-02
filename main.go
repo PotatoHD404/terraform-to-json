@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/yandex-cloud/terraform-provider-yandex/yandex"
+	"github.com/vk-cs/terraform-provider-vkcs/vkcs"
 	"os"
 	"reflect"
 )
@@ -117,7 +117,7 @@ func check(e error) {
 
 func main() {
 	// Instantiate the plugin
-	provider := yandex.Provider()
+	provider := vkcs.Provider()
 
 	// Extract provider information
 	providerValue := reflect.ValueOf(provider).Elem()
@@ -130,12 +130,12 @@ func main() {
 	check(err)
 
 	// create file if not exists
-	_, err = os.Stat("./yandex.json")
+	_, err = os.Stat("./vk.json")
 	if os.IsNotExist(err) {
-		_, err = os.Create("./yandex.json")
+		_, err = os.Create("./vk.json")
 		check(err)
 	}
-	err = os.WriteFile("./yandex.json", m, 0644)
+	err = os.WriteFile("./vk.json", m, 0644)
 	check(err)
 	// save to file
 
